@@ -6,3 +6,4 @@ logs/
 Artifacts/
 mlruns/
 mlflow.db
+final_model/
