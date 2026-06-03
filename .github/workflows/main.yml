@@ -77,6 +77,14 @@ jobs:
               id: login-ecr
               uses: aws-actions/amazon-ecr-login@v1
             
+            - name: Clean Docker
+              run: |
+                  docker stop networksecurity || true
+                  docker rm networksecurity || true
+                  docker image prune -a -f
+                  docker container prune -f
+                  docker builder prune -a -f
+            
             - name: Pull latest images
               run: |
                   docker pull ${{secrets.AWS_ECR_LOGIN_URI}}/${{secrets.ECR_REPOSITORY_NAME}}:latest
