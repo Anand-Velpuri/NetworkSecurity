@@ -12,5 +12,8 @@ dagshub
 fastapi
 uvicorn
 python-multipart
+python-whois
+beautifulsoup4
+requests
 
 ## -e .

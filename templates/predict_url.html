@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Security — Phishing URL Detector</title>
+    <meta name="description" content="AI-powered phishing URL detection. Analyze any URL for phishing threats using machine learning.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-base: #09090b;
+            --bg-elevated: #111113;
+            --bg-surface: #18181b;
+            --bg-surface-hover: #1e1e22;
+            --border-subtle: rgba(255, 255, 255, 0.06);
+            --border-default: rgba(255, 255, 255, 0.09);
+            --border-focus: rgba(99, 179, 237, 0.45);
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            --text-muted: #52525b;
+            --accent: #63b3ed;
+            --accent-hover: #7cc4f5;
+            --accent-muted: rgba(99, 179, 237, 0.1);
+            --accent-border: rgba(99, 179, 237, 0.25);
+            --green: #34d399;
+            --green-muted: rgba(52, 211, 153, 0.08);
+            --green-border: rgba(52, 211, 153, 0.2);
+            --green-text: #6ee7b7;
+            --red: #f87171;
+            --red-muted: rgba(248, 113, 113, 0.08);
+            --red-border: rgba(248, 113, 113, 0.2);
+            --red-text: #fca5a5;
+            --amber: #fbbf24;
+            --amber-muted: rgba(251, 191, 36, 0.08);
+            --amber-border: rgba(251, 191, 36, 0.2);
+            --amber-text: #fde68a;
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --radius-xl: 18px;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg-base);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* ── Subtle noise texture ── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            opacity: 0.025;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            pointer-events: none;
+        }
+
+        /* ── Ambient glow ── */
+        .ambient {
+            position: fixed;
+            z-index: 0;
+            pointer-events: none;
+        }
+        .ambient-1 {
+            top: -180px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 700px;
+            height: 350px;
+            background: radial-gradient(ellipse, rgba(99, 179, 237, 0.06) 0%, transparent 70%);
+        }
+        .ambient-2 {
+            bottom: -120px;
+            right: -100px;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(52, 211, 153, 0.04) 0%, transparent 70%);
+        }
+
+        /* ── Layout ── */
+        .shell {
+            position: relative;
+            z-index: 1;
+            max-width: 820px;
+            margin: 0 auto;
+            padding: 56px 24px 80px;
+        }
+
+        /* ── Navigation bar ── */
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 56px;
+        }
+        .topbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+        }
+        .topbar-logo {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--accent) 0%, #a78bfa 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .topbar-logo svg {
+            width: 18px;
+            height: 18px;
+            color: #fff;
+        }
+        .topbar-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: -0.2px;
+        }
+        .topbar-links {
+            display: flex;
+            gap: 6px;
+        }
+        .topbar-link {
+            padding: 7px 14px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: var(--radius-sm);
+            transition: all 0.15s;
+        }
+        .topbar-link:hover {
+            color: var(--text-primary);
+            background: rgba(255,255,255,0.04);
+        }
+        .topbar-link.active {
+            color: var(--text-primary);
+            background: var(--bg-surface);
+        }
+
+        /* ── Hero ── */
+        .hero {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+        .hero-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 5px 14px 5px 10px;
+            border-radius: 100px;
+            background: var(--accent-muted);
+            border: 1px solid var(--accent-border);
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--accent);
+            letter-spacing: 0.2px;
+            margin-bottom: 24px;
+        }
+        .hero-chip svg { width: 14px; height: 14px; }
+
+        .hero h1 {
+            font-size: clamp(30px, 4.5vw, 46px);
+            font-weight: 800;
+            line-height: 1.12;
+            letter-spacing: -1.5px;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+        .hero-accent {
+            background: linear-gradient(135deg, var(--accent) 0%, #a78bfa 60%, var(--red) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero p {
+            font-size: 16px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            max-width: 480px;
+            margin: 0 auto;
+        }
+
+        /* ── Input panel ── */
+        .panel {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-xl);
+            padding: 28px;
+            margin-bottom: 28px;
+        }
+
+        .field-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+        .field-label svg { width: 14px; height: 14px; opacity: 0.6; }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .url-field {
+            flex: 1;
+            background: var(--bg-base);
+            border: 1.5px solid var(--border-default);
+            border-radius: var(--radius-md);
+            padding: 14px 16px;
+            font-size: 14px;
+            font-family: var(--font-mono);
+            font-weight: 400;
+            color: var(--text-primary);
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .url-field::placeholder { color: var(--text-muted); }
+        .url-field:focus {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px var(--accent-muted);
+        }
+
+        .btn-scan {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 24px;
+            border: none;
+            border-radius: var(--radius-md);
+            background: var(--accent);
+            color: var(--bg-base);
+            font-size: 14px;
+            font-weight: 600;
+            font-family: var(--font-sans);
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .btn-scan svg { width: 16px; height: 16px; }
+        .btn-scan:hover { background: var(--accent-hover); }
+        .btn-scan:active { transform: scale(0.97); }
+        .btn-scan:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+        /* ── Progress ── */
+        .progress-area {
+            display: none;
+            margin-top: 22px;
+        }
+        .progress-area.active { display: block; }
+
+        .progress-track {
+            width: 100%;
+            height: 3px;
+            background: var(--border-subtle);
+            border-radius: 100px;
+            overflow: hidden;
+            margin-bottom: 14px;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent), #a78bfa);
+            border-radius: 100px;
+            transition: width 0.5s ease;
+        }
+
+        .progress-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+        .progress-spinner {
+            width: 14px; height: 14px;
+            border: 2px solid var(--border-subtle);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Error ── */
+        .error-bar {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            margin-top: 18px;
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            background: var(--red-muted);
+            border: 1px solid var(--red-border);
+            font-size: 13px;
+            color: var(--red-text);
+        }
+        .error-bar.active { display: flex; }
+        .error-bar svg { flex-shrink: 0; width: 16px; height: 16px; color: var(--red); }
+
+        /* ── Result ── */
+        .result { display: none; }
+        .result.active { display: block; animation: slideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1); }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── Verdict ── */
+        .verdict {
+            border-radius: var(--radius-xl);
+            padding: 32px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            border: 1px solid;
+        }
+        .verdict.safe {
+            background: var(--green-muted);
+            border-color: var(--green-border);
+        }
+        .verdict.danger {
+            background: var(--red-muted);
+            border-color: var(--red-border);
+        }
+
+        .verdict-icon-wrap {
+            width: 56px; height: 56px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .verdict.safe .verdict-icon-wrap { background: rgba(52, 211, 153, 0.12); }
+        .verdict.danger .verdict-icon-wrap { background: rgba(248, 113, 113, 0.12); }
+        .verdict-icon-wrap svg { width: 26px; height: 26px; }
+        .verdict.safe .verdict-icon-wrap svg { color: var(--green); }
+        .verdict.danger .verdict-icon-wrap svg { color: var(--red); }
+
+        .verdict-body { flex: 1; min-width: 0; }
+        .verdict-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 4px;
+        }
+        .verdict.safe .verdict-label { color: var(--green); }
+        .verdict.danger .verdict-label { color: var(--red); }
+
+        .verdict-title {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin-bottom: 4px;
+        }
+        .verdict.safe .verdict-title { color: var(--green-text); }
+        .verdict.danger .verdict-title { color: var(--red-text); }
+
+        .verdict-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .verdict-url-row {
+            margin-top: 12px;
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            background: rgba(0,0,0,0.3);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-muted);
+            word-break: break-all;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* ── Features ── */
+        .features-panel {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-xl);
+            overflow: hidden;
+        }
+
+        .features-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border-subtle);
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .features-toolbar-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .features-toolbar-title svg { width: 16px; height: 16px; color: var(--text-muted); }
+
+        .legend {
+            display: flex;
+            gap: 14px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+        .legend-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+        }
+        .legend-dot.l-safe { background: var(--green); }
+        .legend-dot.l-suspicious { background: var(--amber); }
+        .legend-dot.l-phishing { background: var(--red); }
+
+        /* Feature list — clean rows instead of grid cards */
+        .features-list {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .feature-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 11px 24px;
+            border-bottom: 1px solid var(--border-subtle);
+            transition: background 0.12s;
+        }
+        .feature-row:hover { background: var(--bg-surface-hover); }
+        /* Remove last row borders for both columns */
+        .feature-row:nth-last-child(-n+2) { border-bottom: none; }
+        /* Add right border on left column items */
+        .feature-row:nth-child(odd) { border-right: 1px solid var(--border-subtle); }
+
+        .feature-name {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .feature-tag {
+            padding: 2px 9px;
+            border-radius: 100px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+        .feature-tag.t-safe {
+            background: var(--green-muted);
+            color: var(--green);
+            border: 1px solid var(--green-border);
+        }
+        .feature-tag.t-suspicious {
+            background: var(--amber-muted);
+            color: var(--amber);
+            border: 1px solid var(--amber-border);
+        }
+        .feature-tag.t-phishing {
+            background: var(--red-muted);
+            color: var(--red);
+            border: 1px solid var(--red-border);
+        }
+
+        /* Stats bar between verdict and features */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            text-align: center;
+            padding: 16px 12px;
+            border-radius: var(--radius-lg);
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            font-variant-numeric: tabular-nums;
+        }
+        .stat-card.s-safe .stat-value { color: var(--green); }
+        .stat-card.s-suspicious .stat-value { color: var(--amber); }
+        .stat-card.s-phishing .stat-value { color: var(--red); }
+        .stat-label {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
+        }
+
+        /* ── Footer ── */
+        .foot {
+            text-align: center;
+            margin-top: 48px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border-subtle);
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+        .foot a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .foot a:hover { color: var(--text-primary); }
+
+        /* ── Responsive ── */
+        @media (max-width: 640px) {
+            .shell { padding: 32px 16px 56px; }
+            .panel { padding: 20px; }
+            .input-row { flex-direction: column; }
+            .btn-scan { justify-content: center; }
+            .features-list { grid-template-columns: 1fr; }
+            .feature-row:nth-child(odd) { border-right: none; }
+            .verdict { flex-direction: column; text-align: center; }
+            .stats-bar { grid-template-columns: 1fr; }
+            .topbar-links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ambient ambient-1"></div>
+    <div class="ambient ambient-2"></div>
+
+    <div class="shell">
+        <!-- Top bar -->
+        <nav class="topbar">
+            <a href="/" class="topbar-brand">
+                <div class="topbar-logo">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <span class="topbar-name">NetSec</span>
+            </a>
+            <div class="topbar-links">
+                <a href="/scan" class="topbar-link active">Scanner</a>
+                <a href="/docs" class="topbar-link">API Docs</a>
+            </div>
+        </nav>
+
+        <!-- Hero -->
+        <header class="hero">
+            <div class="hero-chip">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 8v4l2 2"/></svg>
+                Real-time ML Analysis
+            </div>
+            <h1>Detect <span class="hero-accent">Phishing URLs</span><br>Before They Strike</h1>
+            <p>Our model extracts 30 security features from any URL and classifies it as safe or phishing in seconds.</p>
+        </header>
+
+        <!-- Input panel -->
+        <div class="panel" id="input-panel">
+            <label class="field-label" for="url-input">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                Target URL
+            </label>
+            <form class="input-row" onsubmit="return false;">
+                <input type="text" id="url-input" class="url-field" placeholder="https://example.com" autocomplete="off" spellcheck="false" required>
+                <button type="submit" class="btn-scan" id="btn-scan" onclick="scanURL()">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                    Analyze
+                </button>
+            </form>
+
+            <div class="progress-area" id="progress-area">
+                <div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
+                <div class="progress-status">
+                    <div class="progress-spinner"></div>
+                    <span id="progress-text">Initializing scan&hellip;</span>
+                </div>
+            </div>
+
+            <div class="error-bar" id="error-bar">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span id="error-text">An error occurred.</span>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div class="result" id="result">
+            <!-- Verdict -->
+            <div class="verdict" id="verdict">
+                <div class="verdict-icon-wrap" id="verdict-icon"></div>
+                <div class="verdict-body">
+                    <div class="verdict-label" id="verdict-label"></div>
+                    <h2 class="verdict-title" id="verdict-title"></h2>
+                    <p class="verdict-desc" id="verdict-desc"></p>
+                    <div class="verdict-url-row" id="verdict-url"></div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats-bar" id="stats-bar">
+                <div class="stat-card s-safe">
+                    <div class="stat-value" id="stat-safe">0</div>
+                    <div class="stat-label">Safe</div>
+                </div>
+                <div class="stat-card s-suspicious">
+                    <div class="stat-value" id="stat-suspicious">0</div>
+                    <div class="stat-label">Suspicious</div>
+                </div>
+                <div class="stat-card s-phishing">
+                    <div class="stat-value" id="stat-phishing">0</div>
+                    <div class="stat-label">Phishing</div>
+                </div>
+            </div>
+
+            <!-- Features -->
+            <div class="features-panel">
+                <div class="features-toolbar">
+                    <div class="features-toolbar-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        Feature Breakdown
+                    </div>
+                    <div class="legend">
+                        <span class="legend-item"><span class="legend-dot l-safe"></span>Safe (−1)</span>
+                        <span class="legend-item"><span class="legend-dot l-suspicious"></span>Suspicious (0)</span>
+                        <span class="legend-item"><span class="legend-dot l-phishing"></span>Phishing (1)</span>
+                    </div>
+                </div>
+                <div class="features-list" id="features-list"></div>
+            </div>
+        </div>
+
+        <footer class="foot">
+            <p>Built by <a href="#">Anand Velpuri</a> &middot; Powered by Scikit-Learn &amp; FastAPI</p>
+        </footer>
+    </div>
+
+    <script>
+        const LABELS = {
+            having_IP_Address: "IP Address in URL",
+            URL_Length: "URL Length",
+            Shortining_Service: "URL Shortener",
+            having_At_Symbol: "@ Symbol Present",
+            double_slash_redirecting: "Double-Slash Redirect",
+            Prefix_Suffix: "Dash in Domain",
+            having_Sub_Domain: "Sub-Domain Depth",
+            SSLfinal_State: "SSL Certificate",
+            Domain_registeration_length: "Registration Length",
+            Favicon: "Favicon Origin",
+            port: "Port Number",
+            HTTPS_token: "HTTPS in Domain",
+            Request_URL: "External Resources",
+            URL_of_Anchor: "Anchor URLs",
+            Links_in_tags: "Tag-Embedded Links",
+            SFH: "Form Handler",
+            Submitting_to_email: "Email Submission",
+            Abnormal_URL: "Abnormal URL",
+            Redirect: "Redirect Count",
+            on_mouseover: "MouseOver Events",
+            RightClick: "Right-Click Disabled",
+            popUpWidnow: "Popup Windows",
+            Iframe: "IFrame Present",
+            age_of_domain: "Domain Age",
+            DNSRecord: "DNS Record",
+            web_traffic: "Web Traffic",
+            Page_Rank: "Page Rank",
+            Google_Index: "Google Indexed",
+            Links_pointing_to_page: "Inbound Links",
+            Statistical_report: "Statistical Report"
+        };
+
+        function tagClass(v) { return v === -1 ? "t-safe" : v === 0 ? "t-suspicious" : "t-phishing"; }
+        function tagLabel(v) { return v === -1 ? "Safe" : v === 0 ? "Suspicious" : "Phishing"; }
+
+        async function scanURL() {
+            const url = document.getElementById("url-input").value.trim();
+            if (!url) { document.getElementById("url-input").focus(); return; }
+
+            const btn = document.getElementById("btn-scan");
+            const prog = document.getElementById("progress-area");
+            const bar = document.getElementById("progress-bar");
+            const txt = document.getElementById("progress-text");
+            const err = document.getElementById("error-bar");
+            const res = document.getElementById("result");
+
+            btn.disabled = true;
+            err.classList.remove("active");
+            res.classList.remove("active");
+            prog.classList.add("active");
+            bar.style.width = "0%";
+
+            const steps = [
+                [12, "Resolving domain\u2026"],
+                [30, "Fetching page content\u2026"],
+                [50, "Extracting security features\u2026"],
+                [70, "Analyzing signals\u2026"],
+                [88, "Running classifier\u2026"]
+            ];
+            let si = 0;
+            const tick = setInterval(() => {
+                if (si < steps.length) { bar.style.width = steps[si][0]+"%"; txt.textContent = steps[si][1]; si++; }
+            }, 700);
+
+            try {
+                const r = await fetch("/predict_url", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url })
+                });
+                clearInterval(tick);
+                if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || "Server error"); }
+                const data = await r.json();
+                bar.style.width = "100%";
+                txt.textContent = "Complete";
+                setTimeout(() => { prog.classList.remove("active"); renderResult(data, url); btn.disabled = false; }, 400);
+            } catch (e) {
+                clearInterval(tick);
+                prog.classList.remove("active");
+                err.classList.add("active");
+                document.getElementById("error-text").textContent = e.message || "Something went wrong.";
+                btn.disabled = false;
+            }
+        }
+
+        function renderResult(data, url) {
+            const { prediction, features } = data;
+            const v = document.getElementById("verdict");
+            const isSafe = prediction !== 1;
+
+            v.className = "verdict " + (isSafe ? "safe" : "danger");
+
+            document.getElementById("verdict-icon").innerHTML = isSafe
+                ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
+                : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+
+            document.getElementById("verdict-label").textContent = isSafe ? "ANALYSIS RESULT" : "THREAT DETECTED";
+            document.getElementById("verdict-title").textContent = isSafe ? "This URL Appears Legitimate" : "Phishing URL Detected";
+            document.getElementById("verdict-desc").textContent = isSafe
+                ? "Based on 30 extracted features, this URL shows characteristics consistent with legitimate websites."
+                : "Multiple indicators suggest this URL is a phishing attempt. Avoid entering any personal information.";
+            document.getElementById("verdict-url").textContent = url;
+
+            // Stats
+            let safe=0, sus=0, phish=0;
+            for (const val of Object.values(features)) { if(val===-1) safe++; else if(val===0) sus++; else phish++; }
+            document.getElementById("stat-safe").textContent = safe;
+            document.getElementById("stat-suspicious").textContent = sus;
+            document.getElementById("stat-phishing").textContent = phish;
+
+            // Features
+            const list = document.getElementById("features-list");
+            list.innerHTML = "";
+            for (const [key, val] of Object.entries(features)) {
+                const label = LABELS[key] || key;
+                list.innerHTML += `<div class="feature-row"><span class="feature-name">${label}</span><span class="feature-tag ${tagClass(val)}">${tagLabel(val)}</span></div>`;
+            }
+
+            document.getElementById("result").classList.add("active");
+            document.getElementById("result").scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+
+        document.getElementById("url-input").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); scanURL(); } });
+    </script>
+</body>
+</html>
