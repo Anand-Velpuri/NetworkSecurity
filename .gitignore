@@ -7,3 +7,4 @@ Artifacts/
 mlruns/
 mlflow.db
 final_model/
+.DS_Store
