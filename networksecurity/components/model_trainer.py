@@ -21,9 +21,21 @@ from sklearn.ensemble import (
     GradientBoostingClassifier,
     RandomForestClassifier
 )
+from dotenv import load_dotenv
+load_dotenv(override=True)
+
 import mlflow
-import dagshub
-dagshub.init(repo_owner='anandvelpuri', repo_name='NetworkSecurity', mlflow=True)
+# import dagshub
+# dagshub.init(repo_owner='anandvelpuri', repo_name='NetworkSecurity', mlflow=True)
+
+
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
+
+if MLFLOW_TRACKING_URI:
+    os.environ["MLFLOW_TRACKING_USERNAME"] = os.getenv("MLFLOW_TRACKING_USERNAME", "")
+    os.environ["MLFLOW_TRACKING_PASSWORD"] = os.getenv("MLFLOW_TRACKING_PASSWORD", "")
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    
 
 class ModelTrainer:
     def __init__(self, data_transformation_artifact: DataTransformationArtifact, model_trainer_config: ModelTrainerConfig):
